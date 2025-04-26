@@ -1,0 +1,7 @@
+---
+title: "PML_M10_16231059"
+author: "Zafyra Nur Rizqi"
+date: "2025-04-23"
+output: pdf_document
+---
+gugugugu
