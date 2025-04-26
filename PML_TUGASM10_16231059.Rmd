@@ -4,4 +4,150 @@ author: "Zafyra Nur Rizqi"
 date: "2025-04-23"
 output: pdf_document
 ---
-gugugugu
+
+```{r load-packages, echo=FALSE, message=FALSE}
+suppressWarnings({
+  library(tidyverse)
+  library(datarium)
+  library(lmtest)
+  library(car)
+})
+
+model <- lm(sales ~ youtube, data = marketing)
+```
+
+## 1. Uji Heteroskedastisitas
+
+-----------
+
+- Model Regresi
+```{r}
+model <- lm(sales ~ youtube, data = marketing)
+```
+
+- Manual
+
+```{r}
+resid_kuadrat <- residuals(model)^2
+mod_resid <- lm(resid_kuadrat ~ marketing$youtube)
+chi_sq <- nrow(marketing) * summary(mod_resid)$r.squared
+p_val <- 1 - pchisq(chi_sq, df = 1)
+cat("BP =", round(chi_sq, 3), "; p-value =", format.pval(p_val, digits = 4))
+```
+
+- Fungsi langsung di R
+
+```{r}
+bptest(model)
+```
+
+- Kesimpulan
+
+Pendekatan manual melalui regresi kuadrat residual terhadap variabel independen serta metode statistik menggunakan fungsi `bptest()` dari paket lmtest menghasilkan nilai statistik Breusch-Pagan (BP) sebesar 48.038 dengan p-value yang sangat kecil (4.18e-12). Kesamaan hasil dari kedua metode tersebut menunjukkan adanya indikasi kuat terhadap heteroskedastisitas dalam model regresi. Oleh karena itu, asumsi mengenai homogenitas varians residual tidak terpenuhi pada model ini.
+
+----------
+
+## 2. Uji Normalitas
+
+-----------
+
+- Model Regresi
+```{r}
+log.model <- lm(log(sales) ~ youtube, data = marketing)
+```
+
+- Manual
+
+```{r}
+error <- residuals(log.model)
+e_cdf <- ecdf(error)
+t_cdf <- pnorm(error, mean = 0, sd = sd(error))
+D <- max(abs(e_cdf(error) - t_cdf))
+print(D)
+```
+
+- Fungsi langsung di R
+
+```{r}
+ks.test(error, "pnorm", 0, sd(error))
+
+ks.test(error, "pnorm", 0, sd(residuals(model)))
+```
+
+- Kesimpulan
+
+Perhitungan manual menunjukkan nilai K-S sebesar 0,0658037, sementara hasil uji menggunakan fungsi ks.test() pada model logaritmik (log.model) menghasilkan nilai K-S sebesar 0,070804 dengan p-value 0,2686. Kedua nilai ini cukup serupa dan menunjukkan bahwa tidak ada perbedaan signifikan antara distribusi residual dan distribusi normal, sehingga asumsi normalitas dapat diterima pada model ini. Sebaliknya, uji K-S pada residual model tanpa transformasi (model) menghasilkan nilai statistik 0,45656 dan p-value yang sangat kecil (< 2.2e-16), menandakan adanya penyimpangan signifikan dari distribusi normal. Dari perbedaan hasil ini dapat disimpulkan bahwa dengan penggunaan transformasi logaritmik dalam log.model, yang berfungsi untuk menstabilkan varians dan memperbaiki kemencengan data penjualan, sehingga menghasilkan residual yang lebih mendekati distribusi normal dan memenuhi asumsi dasar regresi.
+
+----------
+
+## 3. Uji Autokorelasi
+
+-----------
+
+- Manual
+
+```{r}
+n <- dim(marketing)[1]
+r <- cor(error[-1], error[-n])
+DW <- 2*(1-r)
+DW
+
+
+dU <- 1.778 # Memeriksa apakah nilai DW berada dalam kisaran yang menunjukkan tidak ada autokorelasi
+if(DW > dU && DW < 4-dU){
+  cat("No Autocorrelation, DW = ", DW)
+} else {
+  cat("Autocorrelation exists, DW = ", DW)
+}
+```
+
+- Fungsi langsung di R
+
+```{r}
+dwtest(model) # Model linear biasa
+
+dwtest(log.model) # Model logaritmik
+```
+
+- Kesimpulan
+
+Hasil uji autokorelasi baik dengan pendekatan manual (Durbin-Watson) maupun fungsi dwtest() menghasilkan kesimpulan yang sejalan. Pada model dengan transformasi logaritmik, nilai Durbin-Watson yang diperoleh adalah 1,819 dengan p-value 0,08847, sementara pada model tanpa transformasi, nilai Durbin-Watson mencapai 1,9347 dengan p-value 0,3213. Kedua nilai ini terletak di antara batas atas dan bawah yang kritis, yang berarti tidak ada cukup bukti untuk menyimpulkan adanya autokorelasi dalam residual. Ini menunjukkan bahwa asumsi independensi residual dapat diterima pada kedua model tersebut.
+
+----------
+
+## 4. UJi Multikolinearitas (VIF)
+
+-----------
+
+- Manual
+
+```{r}
+m_youtube <- lm(youtube ~ facebook + newspaper, data = marketing)
+m_facebook <- lm(facebook ~ youtube + newspaper, data = marketing)
+m_newspaper <- lm(newspaper ~ youtube + facebook, data = marketing)
+
+R2_youtube <- summary(m_youtube)$r.squared  
+R2_facebook <- summary(m_facebook)$r.squared  
+R2_newspaper <- summary(m_newspaper)$r.squared  
+
+VIF_y <- 1 / (1 - R2_youtube)
+VIF_f <- 1 / (1 - R2_facebook)
+VIF_n <- 1 / (1 - R2_newspaper)
+
+data.frame(Youtube = VIF_y,
+           Facebook = VIF_f,
+           Newspaper = VIF_n)
+```
+
+- Fungsi langsung di R
+
+```{r}
+model.mlr <- lm(sales ~ youtube + facebook + newspaper, data = marketing)
+vif(model.mlr)
+```
+
+- Kesimpulan
+
+Perhitungan VIF secara manual dan menggunakan fungsi vif() dari paket car menghasilkan hasil yang konsisten. Semua nilai VIF berada dalam rentang 1,00–1,15, yang jauh di bawah ambang batas toleransi umum sebesar 10. Ini menunjukkan bahwa tidak ada masalah multikolinearitas antar variabel independen dalam model regresi berganda. Dengan demikian, model ini memenuhi asumsi bahwa tidak ada korelasi tinggi antar prediktor.
+
+----------
